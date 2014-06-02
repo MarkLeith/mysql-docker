@@ -3,9 +3,9 @@ mysql-docker
 
 Docker configurations for running MySQL deployments.
 
-== MySQL Flavors
+## MySQL Flavors
 
-=== mysql-repo-server-centos-6.4
+### mysql-repo-server-centos-6.4
 
 Sets up CentOS 6.4 with SSH and MySQL started.
 
@@ -20,9 +20,9 @@ Run:
 docker run -d -P -name markleith/mysql-repo-server-centos-6.4
 ```
 
-== Base Hosts
+## Base Hosts
 
-=== centos-6.4
+### centos-6.4
 
 Sets up base image of CentOS 6.4 with SSH.
 

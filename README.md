@@ -12,7 +12,10 @@ Sets up CentOS 6.4 with SSH and MySQL started.
 Build:
 
 ```
-docker build -t markleith/mysql-repo-server-centos-6.4
+cd ./servers/centos-6.4
+docker build -t markleith/centos-6.4 .
+cd ../mysql-repo-server-centos-6.4
+docker build -t markleith/mysql-repo-server-centos-6.4 .
 ```
 
 Run:
@@ -29,7 +32,7 @@ Sets up base image of CentOS 6.4 with SSH.
 Build:
 
 ```
-docker build -t markleith/centos-6.4
+docker build -t markleith/centos-6.4 .
 ```
 
 Run:

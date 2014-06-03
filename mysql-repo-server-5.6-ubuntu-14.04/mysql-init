@@ -1,0 +1,22 @@
+#!/bin/sh
+
+/etc/init.d/mysql start
+
+sleep 2
+
+mysql -u root -e " \
+  SET PASSWORD = PASSWORD('mysql'); \
+  UPDATE mysql.user SET password = PASSWORD('mysql') WHERE user = 'root'; \
+  DELETE FROM mysql.user WHERE user = ''; \
+  GRANT ALL ON *.* TO 'root'@'%' IDENTIFIED BY 'mysql' WITH GRANT OPTION; \
+  GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%' IDENTIFIED BY 'repl'; \
+  GRANT ALL ON *.* TO 'fabric'@'%' IDENTIFIED BY 'fabric'; \
+  GRANT SELECT, SHOW DATABASES, SUPER, REPLICATION CLIENT, PROCESS ON *.* TO 'mem'@'%' IDENTIFIED BY 'mem'"
+
+cd /tmp/mysql-sys
+mysql -u root -pmysql < sys_56.sql
+cd ~
+rm -rf /tmp/mysql-sys
+
+/etc/init.d/mysql stop
+

@@ -5,6 +5,13 @@ Docker configurations for running MySQL deployments.
 
 ## MySQL Flavors
 
+All MySQL instances are configured to listen on port 3306 (the default), with the following users able to connect from all hosts:
+
+* root / mysql (the default SUPER user)
+* repl / repl (a replication user)
+* fabric / fabric (a MySQL Fabric user)
+* mem / mem (a MySQL Enterprise Monitor user)
+
 ### mysql-repo-server-5.6-centos-6.4
 
 Sets up CentOS 6.4 with SSH and MySQL started.
@@ -55,4 +62,6 @@ Supported hosts are:
 
 * CentOS 6.4
 * Ubuntu 14.04
+
+All host root passwords are set to root.
 

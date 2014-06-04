@@ -2,7 +2,7 @@ FROM ubuntu:14.04
 
 MAINTAINER Mark Leith (mark@markleith.co.uk)
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q vim git gdb openssh-server
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q vim bzr git gdb openssh-server
 
 RUN echo 'root:root' | chpasswd
 RUN mkdir -p /var/run/sshd

@@ -2,7 +2,7 @@
 
 /etc/init.d/mysql start
 
-sleep 2
+sleep 5
 
 mysql -u root -e " \
   SET PASSWORD = PASSWORD('mysql'); \

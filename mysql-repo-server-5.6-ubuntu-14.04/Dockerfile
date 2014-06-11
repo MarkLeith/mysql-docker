@@ -2,9 +2,10 @@ FROM markleith/ubuntu-14.04
 
 MAINTAINER Mark Leith (mark@markleith.co.uk)
 
-RUN wget http://dev.mysql.com/get/mysql-apt-config_0.1.5-2ubuntu14.04_all.deb
-RUN DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config_0.1.5-2ubuntu14.04_all.deb
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-server-5.6
+# Latest MySQL from Oracle offical repos
+ADD http://dev.mysql.com/get/mysql-apt-config_0.1.5-2ubuntu14.04_all.deb /tmp/
+RUN DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/mysql-apt-config_0.1.5-2ubuntu14.04_all.deb
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-server
 
 RUN git clone https://github.com/MarkLeith/mysql-sys.git /tmp/mysql-sys
 

@@ -12,24 +12,24 @@ All MySQL instances are configured to listen on port 3306 (the default), with th
 * fabric / fabric (a MySQL Fabric user)
 * mem / mem (a MySQL Enterprise Monitor user)
 
-### mysql-repo-server-5.6-centos-6.4
+### mysql-repo-server-5.6-centos-6.8
 
-Sets up CentOS 6.4 with SSH and MySQL started.
+Sets up CentOS 6.8 with SSH and MySQL started.
 
 MySQL is installed from the [MySQL Yum repository](http://dev.mysql.com/downloads/repo/yum/).
 
 #### Build:
 
 ```
-cd ./servers/centos-6.4
-docker build -t markleith/centos-6.4 .
-cd ../mysql-repo-server-centos-6.4
-docker build -t markleith/mysql-repo-server-5.6-centos-6.4 .
+cd ./hosts/centos-6.8
+docker build -t markleith/centos-6.8 .
+cd ../../mysql-repo-server-5.6-centos-6.8
+docker build -t markleith/mysql-repo-server-5.6-centos-6.8 .
 ```
 
 #### Run:
 ```
-docker run -d -P --name my56centos64 markleith/mysql-repo-server-5.6-centos-6.4
+docker run -d -P --name my56centos68 markleith/mysql-repo-server-5.6-centos-6.8
 ```
 
 ### mysql-repo-server-5.6-ubuntu-14.04
@@ -41,7 +41,7 @@ MySQL is installed from the [MySQL Apt Repository](http://dev.mysql.com/download
 #### Build:
 
 ```
-cd ./servers/ubuntu-14.04
+cd ./hosts/ubuntu-14.04
 docker build -t markleith/ubuntu-14.04 .
 cd ../mysql-repo-server-5.6-ubuntu-14.04
 docker build -t markleith/mysql-repo-server-5.6-ubuntu-14.04 .
@@ -121,7 +121,7 @@ SSH is configured so that you can log in to each container, and debug MySQL issu
 
 Supported hosts are:
 
-* CentOS 6.4
+* CentOS 6.8
 * Ubuntu 14.04
 
 All host root passwords are set to root.

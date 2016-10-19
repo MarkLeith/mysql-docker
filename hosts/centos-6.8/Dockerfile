@@ -1,4 +1,4 @@
-FROM centos:6.4
+FROM centos:6.8
 
 MAINTAINER Mark Leith (mark@markleith.co.uk)
 

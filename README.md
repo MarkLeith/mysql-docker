@@ -9,7 +9,6 @@ All MySQL instances are configured to listen on port 3306 (the default), with th
 
 * root / mysql (the default SUPER user)
 * repl / repl (a replication user)
-* fabric / fabric (a MySQL Fabric user)
 * mem / mem (a MySQL Enterprise Monitor user)
 
 ### mysql-repo-server-5.6-centos-6.8

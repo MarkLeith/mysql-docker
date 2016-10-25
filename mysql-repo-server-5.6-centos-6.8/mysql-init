@@ -12,7 +12,6 @@ mysql -u root -e " \
   DELETE FROM mysql.user WHERE user = ''; \
   GRANT ALL ON *.* TO 'root'@'%' IDENTIFIED BY 'mysql' WITH GRANT OPTION; \
   GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%' IDENTIFIED BY 'repl'; \
-  GRANT ALL ON *.* TO 'fabric'@'%' IDENTIFIED BY 'fabric'; \
   GRANT SELECT, SHOW DATABASES, SUPER, REPLICATION CLIENT, PROCESS ON *.* TO 'mem'@'%' IDENTIFIED BY 'mem'"
 
 cd /tmp/mysql-sys

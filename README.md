@@ -125,4 +125,3 @@ Supported hosts are:
 * Ubuntu 14.04
 
 All host root passwords are set to root.
-

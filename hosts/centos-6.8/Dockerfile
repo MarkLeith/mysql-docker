@@ -2,7 +2,7 @@ FROM centos:6.8
 
 MAINTAINER Mark Leith (mark@markleith.co.uk)
 
-RUN yum -y install vim git bzr gdb openssh-server openssh-clients
+RUN yum -y install vim git bzr gdb openssh-server openssh-clients libaio
 RUN yum -y update
 
 RUN echo 'root:root' | chpasswd

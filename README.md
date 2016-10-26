@@ -61,7 +61,6 @@ optional arguments:
                         Number of NDB nodes to run (default: 4; max: 48)
   -s SQL_NODES, --sql-nodes SQL_NODES
                         Number of SQL nodes to run (default: 2)
-                        ```
 ```
 
 You must invoke this with both the build and start arguments being the same, as the build command builds the initial cluster.ini file, which is then used when started using the start command - the initial number of ndb nodes must be as expected when started.

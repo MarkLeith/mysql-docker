@@ -39,7 +39,7 @@ class Node:
 		self.node_type = node_type
 
 	def __str__(self):
-		return("Node("+str(self.name)+" : "+str(self.port)+" : "+str(self.node_type)+")")
+		return(' "node" { "name" : "'+str(self.name)+'", "bound_port" : '+str(self.port)+', "node_type" : "'+str(self.node_type)+'" } ')
 
 	def __repr__(self):
 		return str(self)
@@ -53,16 +53,19 @@ def add_node(nodeName, node_type):
 		port = cmd("docker port {0} 3306/tcp".format(nodeName))
 	node = Node(nodeName, port.strip().split(":",1)[1], node_type)
 	nodes.append(node)
-	debug("Added: {0}".format(node))
+	log("Added: {0}".format(node))
 
 def ts():
 	return datetime.datetime.utcnow().isoformat()+": "
+
+def log(msg):
+	print ts()+msg
 
 def debug(msg):
 	if args.debug: print ts()+msg
 
 def cmd(cmd):
-	debug("Running: " + cmd)
+	log("Running: " + cmd)
 	return subprocess.check_output(cmd, shell=True)
 
 def write_ini_section(file, header, nodeid, nodeip):
@@ -95,7 +98,7 @@ def build_config_ini():
 
 def connect_string():
 	mgmd_nodes = filter(lambda x: x.node_type == "mgmd", nodes)
-	return ",".join(x.name+":1186" for x in mgmd_nodes)
+	return ",".join(x.name + ":1186" for x in mgmd_nodes)
 
 def management_nodes_option(x):
 	x = int(x)
@@ -106,7 +109,6 @@ def management_nodes_option(x):
 def create_mgmd_nodes():
 	nodeid = MGMD_BASE_ID
 	mgmdSibling = nodeid + 1
-	ndbConnectString = ""
 	for i in range(args.management_nodes):
 		if i: nodeid, mgmdSibling = mgmdSibling, nodeid
 		nodeName = "mymgmd{0}".format(nodeid)
@@ -141,6 +143,13 @@ def create_sql_nodes():
 		add_node(nodeName, "sql")
 		nodeid += 1
 
+def network_exists(network):
+	networks = cmd("docker network ls")
+	if networks.find(network) != -1:
+		return True
+	else:
+		return False
+
 def build(args):
 	build_config_ini()
 	cmd('docker build -t markleith/mysqlcluster75:ndb_mgmd -f management-node/Dockerfile management-node')
@@ -148,19 +157,29 @@ def build(args):
 	cmd('docker build -t markleith/mysqlcluster75:sql -f sql-node/Dockerfile sql-node')
 
 def start(args):
-	networks = cmd("docker network ls")
-	if networks.find(args.network) != -1:
+	if network_exists(args.network):
 		debug(args.network + " network found, using existing")
 	else:
-		debug(args.network + " network not found, creating")
-		cmd("docker network create --subnet="+SUBNET_BASE+" "+args.network)
+		log(args.network + " network not found, creating")
+		cmd("docker network create --subnet=" + SUBNET_BASE + " " + args.network)
 	create_mgmd_nodes()
 	create_data_nodes()
 	create_sql_nodes()
-	print "{0}Started: {1}".format(ts(), nodes)
+	log("Started: {0}".format(nodes))
 
 def stop(args):
-	debug("OH DEAR, MUST IMPLEMENT STOP")
+	if network_exists(args.network):
+		log(args.network + " found")
+		containers = cmd('docker network inspect --format="{{range $i, $c := .Containers}}{{$i}},{{end}}" ' + args.network).rstrip(",\n").split(',')
+		containers = [x[0:12] for x in containers]
+		if len(containers) and containers[0] != "":
+			log("Found containers: {0}".format(containers))
+			cmd("docker stop {0}".format(" ".join(containers)))
+			log("Done")
+		else:
+			log("No containers found running on {0}, stopping".format(args.network))
+	else:
+		log("{0} network not found, stopping".format(args.network))
 
 def clean(args):
 	debug("OH DEAR, MUST IMPLEMENT CLEAN")
@@ -169,7 +188,7 @@ if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description="Create a test MySQL Cluster deployment in docker")
 	network = argparse.ArgumentParser(add_help=False)
-	network.add_argument('-n', '--network', default="myclusternet", help='Name of the docker network to use')
+	network.add_argument('-n', '--network', default="myclusternet", help='Name of the docker network to use (default: myclusternet)')
 	mgmd_nodes = argparse.ArgumentParser(add_help=False)
 	mgmd_nodes.add_argument('-m', '--management-nodes', default=2, type=management_nodes_option, help='Number of Management nodes to run (default: 2; max: 2)')
 	data_nodes = argparse.ArgumentParser(add_help=False)
@@ -181,7 +200,7 @@ if __name__ == '__main__':
 	sp_build.set_defaults(func=build)
 	sp_start = sp.add_parser('start', parents=[network, mgmd_nodes, data_nodes, sql_nodes], help='Start up the cluster containers')
 	sp_start.set_defaults(func=start)
-	sp_stop = sp.add_parser('stop', parents=[network], help='Stop the cluster containers')
+	sp_stop = sp.add_parser('stop', parents=[network], help='Stop the cluster containers for the specified network')
 	sp_stop.set_defaults(func=stop)
 	sp_clean = sp.add_parser('clean', parents=[network], help='Stop and remove the cluster containers')
 	sp_clean.set_defaults(func=clean)

@@ -19,6 +19,7 @@
 import argparse
 import datetime
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,8 @@ MGMD_BASE_IP = "172.18.0.2"
 API_BASE_ID = 51
 API_BASE_IP = "172.18.0.1"
 SUBNET_BASE = "172.18.0.0/16"
+
+QUOTE = "\"" if platform.system() == "Windows" else "'"
 
 nodes=[]
 
@@ -98,7 +101,7 @@ def build_config_ini():
 			nodeid += 1
 
 def get_container(name):
-	container = cmd('docker ps -q -a --filter "name={0}"'.format(name)).rstrip(",\n")
+	container = cmd('docker ps -q -a --filter {0}name={1}{0}'.format(QUOTE, name)).rstrip(",\n")
 	debug("Found container id {0}".format(container))
 	if len(container) and container != "":
 		return container
@@ -113,12 +116,12 @@ def network_exists(network):
 		return False
 
 def connected_containers(network):
-	containers = cmd('docker network inspect --format="{{range $i, $c := .Containers}}{{$i}},{{end}}" ' + network).rstrip(",\n").split(',')
+	containers = cmd('docker network inspect --format={0}{{{{range $i, $c := .Containers}}}}{{{{$i}}}},{{{{end}}}}{0} {1}'.format(QUOTE, network)).rstrip(",\n").split(',')
 	containers = [x[0:12] for x in containers]
 	return containers
 
 def connected_networks(container):
-	return cmd('docker inspect --format "{{range $i, $n := .NetworkSettings.Networks}}{{$i}},{{end}}" ' + container).rstrip(",\n").split(',')
+	return cmd('docker inspect --format {0}{{{{range $i, $n := .NetworkSettings.Networks}}}}{{{{$i}}}},{{{{end}}}}{0} {1}'.format(QUOTE, container)).rstrip(",\n").split(',')
 
 def start_container(container, expectedNetwork, name):
 	networks = connected_networks(container)

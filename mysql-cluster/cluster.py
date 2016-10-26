@@ -21,6 +21,7 @@ import datetime
 import os
 import shutil
 import subprocess
+import sys
 
 NDBD_BASE_ID = 1
 NDBD_BASE_IP = "172.18.0.1"
@@ -39,7 +40,7 @@ class Node:
 		self.node_type = node_type
 
 	def __str__(self):
-		return(' "node" { "name" : "'+str(self.name)+'", "bound_port" : '+str(self.port)+', "node_type" : "'+str(self.node_type)+'" } ')
+		return(' "node" : { "name" : "'+str(self.name)+'", "bound_port" : '+str(self.port)+', "node_type" : "'+str(self.node_type)+'" } ')
 
 	def __repr__(self):
 		return str(self)
@@ -53,7 +54,7 @@ def add_node(nodeName, node_type):
 		port = cmd("docker port {0} 3306/tcp".format(nodeName))
 	node = Node(nodeName, port.strip().split(":",1)[1], node_type)
 	nodes.append(node)
-	log("Added: {0}".format(node))
+	debug("Added: {0}".format(node))
 
 def ts():
 	return datetime.datetime.utcnow().isoformat()+": "
@@ -62,7 +63,7 @@ def log(msg):
 	print ts()+msg
 
 def debug(msg):
-	if args.debug: print ts()+msg
+	if args.debug: print "{0}Debug: {1}".format(ts(), msg)
 
 def cmd(cmd):
 	log("Running: " + cmd)
@@ -96,6 +97,38 @@ def build_config_ini():
 			write_ini_section(f, "MYSQLD", nodeid, "{0}{1}".format(API_BASE_IP, nodeid))
 			nodeid += 1
 
+def get_container(name):
+	container = cmd('docker ps -q -a --filter "name={0}"'.format(name)).rstrip(",\n")
+	debug("Found container id {0}".format(container))
+	if len(container) and container != "":
+		return container
+	else:
+		return None
+
+def network_exists(network):
+	networks = cmd("docker network ls")
+	if networks.find(network) != -1:
+		return True
+	else:
+		return False
+
+def connected_containers(network):
+	containers = cmd('docker network inspect --format="{{range $i, $c := .Containers}}{{$i}},{{end}}" ' + network).rstrip(",\n").split(',')
+	containers = [x[0:12] for x in containers]
+	return containers
+
+def connected_networks(container):
+	return cmd('docker inspect --format "{{range $i, $n := .NetworkSettings.Networks}}{{$i}},{{end}}" ' + container).rstrip(",\n").split(',')
+
+def start_container(container, expectedNetwork, name):
+	networks = connected_networks(container)
+	debug("Container {0} connected to networks {1}".format(container, " ".join(networks)))
+	if any(expectedNetwork in n for n in networks):
+		cmd("docker start {0}".format(container))
+	else:
+		log("Error: Found container {0}, but it was not part of the {1} network (it was on {2}), stopping!".format(name, args.network, ",".join(networks)))
+		sys.exit()
+
 def connect_string():
 	mgmd_nodes = filter(lambda x: x.node_type == "mgmd", nodes)
 	return ",".join(x.name + ":1186" for x in mgmd_nodes)
@@ -106,15 +139,19 @@ def management_nodes_option(x):
 		raise argparse.ArgumentTypeError("Maximum Managment nodes is 2")
 	return x
 
-def create_mgmd_nodes():
+def run_mgmd_nodes():
 	nodeid = MGMD_BASE_ID
 	mgmdSibling = nodeid + 1
 	for i in range(args.management_nodes):
 		if i: nodeid, mgmdSibling = mgmdSibling, nodeid
 		nodeName = "mymgmd{0}".format(nodeid)
 		ip = "{0}{1}".format(MGMD_BASE_IP, nodeid)
-		runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e NOWAIT={4} -e CONNECTSTRING={5} markleith/mysqlcluster75:ndb_mgmd'
-		cmd(runCmd.format(args.network, nodeName, ip, nodeid, mgmdSibling, connect_string()))
+		container = get_container(nodeName)
+		if container is not None:
+			start_container(container, args.network, nodeName)
+		else:
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e NOWAIT={4} -e CONNECTSTRING={5} markleith/mysqlcluster75:ndb_mgmd'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, mgmdSibling, connect_string()))
 		add_node(nodeName, "mgmd")
 
 def data_nodes_option(x):
@@ -123,32 +160,33 @@ def data_nodes_option(x):
 		raise argparse.ArgumentTypeError("Maximum Data nodes is 48")
 	return x
 
-def create_data_nodes():
+def run_data_nodes():
 	nodeid = NDBD_BASE_ID
 	for i in range(args.data_nodes):
 		nodeName = "myndbmtd{0}".format(nodeid)
 		ip = "{0}{1}".format(NDBD_BASE_IP, nodeid)
-		runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} markleith/mysqlcluster75:ndbmtd'
-		cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string()))
+		container = get_container(nodeName)
+		if container is not None:
+			start_container(container, args.network, nodeName)
+		else:
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} markleith/mysqlcluster75:ndbmtd'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string()))
 		add_node(nodeName, "ndbmtd")
 		nodeid += 1
 
-def create_sql_nodes():
+def run_sql_nodes():
 	nodeid = API_BASE_ID
 	for i in range(args.sql_nodes):
 		nodeName = "mysqlndb{0}".format(nodeid)
 		ip = "{0}{1}".format(API_BASE_IP, nodeid)
-		runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} markleith/mysqlcluster75:sql'
-		cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string()))
+		container = get_container(nodeName)
+		if container is not None:
+			start_container(container, args.network, nodeName)
+		else:
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} markleith/mysqlcluster75:sql'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string()))
 		add_node(nodeName, "sql")
 		nodeid += 1
-
-def network_exists(network):
-	networks = cmd("docker network ls")
-	if networks.find(network) != -1:
-		return True
-	else:
-		return False
 
 def build(args):
 	build_config_ini()
@@ -158,22 +196,25 @@ def build(args):
 
 def start(args):
 	if network_exists(args.network):
-		debug(args.network + " network found, using existing")
+		log("Info: {0} network found, checking if any containers are already running".format(args.network))
+		containers = connected_containers(args.network)
+		if len(containers) and containers[0] != "":
+			log("Error: {0} network already has running containers, please fully stop this cluster, or clean, before attempting to start".format(args.network))
+			sys.exit()
 	else:
-		log(args.network + " network not found, creating")
+		log("Info: {0} network not found, creating".format(args.network))
 		cmd("docker network create --subnet=" + SUBNET_BASE + " " + args.network)
-	create_mgmd_nodes()
-	create_data_nodes()
-	create_sql_nodes()
-	log("Started: {0}".format(nodes))
+	run_mgmd_nodes()
+	run_data_nodes()
+	run_sql_nodes()
+	log("Info: Started: {0}".format(nodes))
 
 def stop(args):
 	if network_exists(args.network):
-		log(args.network + " found")
-		containers = cmd('docker network inspect --format="{{range $i, $c := .Containers}}{{$i}},{{end}}" ' + args.network).rstrip(",\n").split(',')
-		containers = [x[0:12] for x in containers]
+		debug("Found network {0}".format(args.network))
+		containers = connected_containers(args.network)
+		debug("Found containers: {0}".format(containers))
 		if len(containers) and containers[0] != "":
-			log("Found containers: {0}".format(containers))
 			cmd("docker stop {0}".format(" ".join(containers)))
 			log("Done")
 		else:

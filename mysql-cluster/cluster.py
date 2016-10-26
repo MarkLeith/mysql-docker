@@ -24,15 +24,27 @@ import shutil
 import subprocess
 import sys
 
+REPO = "markleith/mysqlcluster75"
+
+NDBD_BASE_IMAGE = REPO+":ndbmtd"
 NDBD_BASE_ID = 1
 NDBD_BASE_IP = "172.18.0.1"
+
+MGMD_BASE_IMAGE = REPO+":ndb_mgmd"
 MGMD_BASE_ID = 49
 MGMD_BASE_IP = "172.18.0.2"
+
+API_BASE_IMAGE = REPO+":sql"
 API_BASE_ID = 51
 API_BASE_IP = "172.18.0.1"
+
 SUBNET_BASE = "172.18.0.0/16"
 
+NETWORK_NAME = "myclusternet"
+
 QUOTE = "\"" if platform.system() == "Windows" else "'"
+
+CONFIG_INI = os.getcwd()+"/management-node/config.ini"
 
 nodes=[]
 
@@ -78,15 +90,14 @@ def write_ini_section(file, header, nodeid, nodeip):
 	file.write("HostName={0}\n".format(nodeip))
 
 def build_config_ini():
-	config_ini = os.getcwd()+"/management-node/config.ini"
 	try:
 		cfgtmpl = os.getcwd()+"/management-node/config.ini.in"
-		shutil.copy(cfgtmpl, config_ini)
+		shutil.copy(cfgtmpl, CONFIG_INI)
 	except shutil.Error as e:
 		print('Error: %s' % e)
 	except IOError as e:
 		print('Error: %s' % e.strerror)
-	with open(config_ini, "ab") as f:
+	with open(CONFIG_INI, "ab") as f:
 		nodeid = MGMD_BASE_ID
 		for i in range(args.management_nodes):
 			write_ini_section(f, "NDB_MGMD", nodeid, "{0}{1}".format(MGMD_BASE_IP, nodeid))
@@ -153,8 +164,8 @@ def run_mgmd_nodes():
 		if container is not None:
 			start_container(container, args.network, nodeName)
 		else:
-			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e NOWAIT={4} -e CONNECTSTRING={5} markleith/mysqlcluster75:ndb_mgmd'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, mgmdSibling, connect_string()))
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e NOWAIT={4} -e CONNECTSTRING={5} {6}'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, mgmdSibling, connect_string(), MGMD_BASE_IMAGE))
 		add_node(nodeName, "mgmd")
 
 def data_nodes_option(x):
@@ -172,8 +183,8 @@ def run_data_nodes():
 		if container is not None:
 			start_container(container, args.network, nodeName)
 		else:
-			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} markleith/mysqlcluster75:ndbmtd'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string()))
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), NDBD_BASE_IMAGE))
 		add_node(nodeName, "ndbmtd")
 		nodeid += 1
 
@@ -186,18 +197,21 @@ def run_sql_nodes():
 		if container is not None:
 			start_container(container, args.network, nodeName)
 		else:
-			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} markleith/mysqlcluster75:sql'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string()))
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), API_BASE_IMAGE))
 		add_node(nodeName, "sql")
 		nodeid += 1
 
 def build(args):
 	build_config_ini()
-	cmd('docker build -t markleith/mysqlcluster75:ndb_mgmd -f management-node/Dockerfile management-node')
-	cmd('docker build -t markleith/mysqlcluster75:ndbmtd -f data-node/Dockerfile data-node')
-	cmd('docker build -t markleith/mysqlcluster75:sql -f sql-node/Dockerfile sql-node')
+	cmd('docker build -t {0} -f management-node/Dockerfile management-node'.format(MGMD_BASE_IMAGE))
+	cmd('docker build -t {0} -f data-node/Dockerfile data-node'.format(NDBD_BASE_IMAGE))
+	cmd('docker build -t {0} -f sql-node/Dockerfile sql-node'.format(API_BASE_IMAGE))
 
 def start(args):
+	if not os.path.isfile(CONFIG_INI):
+		log("Error: management-node/config.ini does not exist, you need to issue the build command first")
+		sys.exit()
 	if network_exists(args.network):
 		log("Info: {0} network found, checking if any containers are already running".format(args.network))
 		containers = connected_containers(args.network)
@@ -212,27 +226,72 @@ def start(args):
 	run_sql_nodes()
 	log("Info: Started: {0}".format(nodes))
 
+def stop_containers(containers):
+	cmd("docker stop {0}".format(" ".join(containers)))
+
 def stop(args):
 	if network_exists(args.network):
-		debug("Found network {0}".format(args.network))
-		containers = connected_containers(args.network)
+		debug("Found network {0}".format(network))
+		containers = connected_containers(network)
 		debug("Found containers: {0}".format(containers))
 		if len(containers) and containers[0] != "":
-			cmd("docker stop {0}".format(" ".join(containers)))
-			log("Done")
+			stop_containers(containers)
+			log("Info: Stopping containers done")
 		else:
-			log("No containers found running on {0}, stopping".format(args.network))
+			log("Info: No containers found running on {0}".format(network))
 	else:
-		log("{0} network not found, stopping".format(args.network))
+		log("Info: {0} network not found".format(args.network))
+
+def find_containers_using_image(name):
+	containers = cmd('docker ps -a --filter {0}ancestor={1}{0} --format {0}{{{{.ID}}}}{0}'.format(QUOTE, name)).rstrip("\n").split('\n')
+	debug("Found containers: {0}".format(containers))
+	return containers
+
+def remove_containers(containers):
+	cmd("docker rm {0}".format(" ".join(containers)))
+
+def find_images(repo):
+	images = cmd("docker images {0} --format {1}{{{{.ID}}}}{1}".format(repo, QUOTE)).rstrip("\n").split('\n')
+	debug("Found images: {0}".format(images))
+	return images
+
+def find_dangling_images():
+	images = cmd("docker images --filter {0}dangling=true{0}  --format {0}{{{{.ID}}}}{0}".format(QUOTE)).rstrip("\n").split('\n')
+	debug("Found dangling images: {0}".format(images))
+	return images
+
+def remove_images(images):
+	cmd("docker rmi {0}".format(" ".join(images)))
 
 def clean(args):
-	debug("OH DEAR, MUST IMPLEMENT CLEAN")
+	containers = []
+	containers.extend(find_containers_using_image(MGMD_BASE_IMAGE))
+	containers.extend(find_containers_using_image(NDBD_BASE_IMAGE))
+	containers.extend(find_containers_using_image(API_BASE_IMAGE))
+	debug("Found containers: {0}".format(containers))
+	if len(containers) and containers[0] != "":
+		stop_containers(containers)
+		remove_containers(containers)
+	if args.images:
+		images = find_images(REPO)
+		if len(images) and images[0] != "":
+			log("Info: Removing {0} images".format(REPO))
+			remove_images(images)
+	if args.dangling:
+		dangling = find_dangling_images()
+		if len(dangling) and dangling[0] != "":
+			log("Info: Removing dangling images")
+			remove_images(dangling)
+	if network_exists(NETWORK_NAME):
+		cmd("docker network rm {0}".format(NETWORK_NAME))
+	if os.path.isfile(CONFIG_INI):
+		os.remove(CONFIG_INI)
 
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description="Create a test MySQL Cluster deployment in docker")
 	network = argparse.ArgumentParser(add_help=False)
-	network.add_argument('-n', '--network', default="myclusternet", help='Name of the docker network to use (default: myclusternet)')
+	network.add_argument('-n', '--network', default=NETWORK_NAME, help='Name of the docker network to use (default: '+NETWORK_NAME+')')
 	mgmd_nodes = argparse.ArgumentParser(add_help=False)
 	mgmd_nodes.add_argument('-m', '--management-nodes', default=2, type=management_nodes_option, help='Number of Management nodes to run (default: 2; max: 2)')
 	data_nodes = argparse.ArgumentParser(add_help=False)
@@ -247,8 +306,10 @@ if __name__ == '__main__':
 	sp_stop = sp.add_parser('stop', parents=[network], help='Stop the cluster containers for the specified network')
 	sp_stop.set_defaults(func=stop)
 	sp_clean = sp.add_parser('clean', parents=[network], help='Stop and remove the cluster containers')
+	sp_clean.add_argument('-i', '--images', default=False, action="store_true", help='Delete '+REPO+' docker images (default: false)')
+	sp_clean.add_argument('-d', '--dangling', default=False, action="store_true", help='Delete dangling docker images (default: false)')
 	sp_clean.set_defaults(func=clean)
-	parser.add_argument('--debug', default=False, action="store_true", help='Whether to print debug info')
+	parser.add_argument('--debug', default=False, action="store_true", help='Whether to print debug info (default: false)')
 	args = parser.parse_args()
 
 	debug("Arguments: {0}".format(args))

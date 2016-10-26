@@ -24,17 +24,18 @@ import shutil
 import subprocess
 import sys
 
-REPO = "markleith/mysqlcluster75"
+REPO = "markleith/mysql-cluster"
+VERSION = "7.5"
 
-NDBD_BASE_IMAGE = REPO+":ndbmtd"
+NDBD_BASE_IMAGE = REPO+"-ndbmtd"
 NDBD_BASE_ID = 1
 NDBD_BASE_IP = "172.18.0.1"
 
-MGMD_BASE_IMAGE = REPO+":ndb_mgmd"
+MGMD_BASE_IMAGE = REPO+"-mgmd"
 MGMD_BASE_ID = 49
 MGMD_BASE_IP = "172.18.0.2"
 
-API_BASE_IMAGE = REPO+":sql"
+API_BASE_IMAGE = REPO+"-sql"
 API_BASE_ID = 51
 API_BASE_IP = "172.18.0.1"
 
@@ -164,8 +165,8 @@ def run_mgmd_nodes():
 		if container is not None:
 			start_container(container, args.network, nodeName)
 		else:
-			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e NOWAIT={4} -e CONNECTSTRING={5} {6}'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, mgmdSibling, connect_string(), MGMD_BASE_IMAGE))
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e NOWAIT={4} -e CONNECTSTRING={5} {6}:{7}'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, mgmdSibling, connect_string(), MGMD_BASE_IMAGE, VERSION))
 		add_node(nodeName, "mgmd")
 
 def data_nodes_option(x):
@@ -183,8 +184,8 @@ def run_data_nodes():
 		if container is not None:
 			start_container(container, args.network, nodeName)
 		else:
-			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), NDBD_BASE_IMAGE))
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}:{6}'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), NDBD_BASE_IMAGE, VERSION))
 		add_node(nodeName, "ndbmtd")
 		nodeid += 1
 
@@ -197,16 +198,16 @@ def run_sql_nodes():
 		if container is not None:
 			start_container(container, args.network, nodeName)
 		else:
-			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), API_BASE_IMAGE))
+			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}:{6}'
+			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), API_BASE_IMAGE, VERSION))
 		add_node(nodeName, "sql")
 		nodeid += 1
 
 def build(args):
 	build_config_ini()
-	cmd('docker build -t {0} -f management-node/Dockerfile management-node'.format(MGMD_BASE_IMAGE))
-	cmd('docker build -t {0} -f data-node/Dockerfile data-node'.format(NDBD_BASE_IMAGE))
-	cmd('docker build -t {0} -f sql-node/Dockerfile sql-node'.format(API_BASE_IMAGE))
+	cmd('docker build -t {0}:{1} -f management-node/Dockerfile management-node'.format(MGMD_BASE_IMAGE, VERSION))
+	cmd('docker build -t {0}:{1} -f data-node/Dockerfile data-node'.format(NDBD_BASE_IMAGE, VERSION))
+	cmd('docker build -t {0}:{1} -f sql-node/Dockerfile sql-node'.format(API_BASE_IMAGE, VERSION))
 
 def start(args):
 	if not os.path.isfile(CONFIG_INI):
@@ -231,14 +232,14 @@ def stop_containers(containers):
 
 def stop(args):
 	if network_exists(args.network):
-		debug("Found network {0}".format(network))
-		containers = connected_containers(network)
+		debug("Found network {0}".format(args.network))
+		containers = connected_containers(args.network)
 		debug("Found containers: {0}".format(containers))
 		if len(containers) and containers[0] != "":
 			stop_containers(containers)
 			log("Info: Stopping containers done")
 		else:
-			log("Info: No containers found running on {0}".format(network))
+			log("Info: No containers found running on {0}".format(args.network))
 	else:
 		log("Info: {0} network not found".format(args.network))
 
@@ -250,8 +251,8 @@ def find_containers_using_image(name):
 def remove_containers(containers):
 	cmd("docker rm {0}".format(" ".join(containers)))
 
-def find_images(repo):
-	images = cmd("docker images {0} --format {1}{{{{.ID}}}}{1}".format(repo, QUOTE)).rstrip("\n").split('\n')
+def find_images(repo_base):
+	images = cmd("docker images {0}-* --format {1}{{{{.ID}}}}{1}".format(repo_base, QUOTE)).rstrip("\n").split('\n')
 	debug("Found images: {0}".format(images))
 	return images
 
@@ -265,9 +266,9 @@ def remove_images(images):
 
 def clean(args):
 	containers = []
-	containers.extend(find_containers_using_image(MGMD_BASE_IMAGE))
-	containers.extend(find_containers_using_image(NDBD_BASE_IMAGE))
-	containers.extend(find_containers_using_image(API_BASE_IMAGE))
+	containers.extend(find_containers_using_image(MGMD_BASE_IMAGE+":"+VERSION))
+	containers.extend(find_containers_using_image(NDBD_BASE_IMAGE+":"+VERSION))
+	containers.extend(find_containers_using_image(API_BASE_IMAGE+":"+VERSION))
 	debug("Found containers: {0}".format(containers))
 	if len(containers) and containers[0] != "":
 		stop_containers(containers)
@@ -275,7 +276,7 @@ def clean(args):
 	if args.images:
 		images = find_images(REPO)
 		if len(images) and images[0] != "":
-			log("Info: Removing {0} images".format(REPO))
+			log("Info: Removing {0}-* images".format(REPO))
 			remove_images(images)
 	if args.dangling:
 		dangling = find_dangling_images()

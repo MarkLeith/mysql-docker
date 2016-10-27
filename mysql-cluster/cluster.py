@@ -41,7 +41,7 @@ API_BASE_IP = "172.18.0.1"
 
 SUBNET_BASE = "172.18.0.0/16"
 
-NETWORK_NAME = "myclusternet"
+NAME = "mycluster"
 
 QUOTE = "\"" if platform.system() == "Windows" else "'"
 
@@ -141,7 +141,7 @@ def start_container(container, expectedNetwork, name):
 	if any(expectedNetwork in n for n in networks):
 		cmd("docker start {0}".format(container))
 	else:
-		log("Error: Found container {0}, but it was not part of the {1} network (it was on {2}), stopping!".format(name, args.network, ",".join(networks)))
+		log("Error: Found container {0}, but it was not part of the {1} network (it was on {2}), stopping!".format(name, args.name, ",".join(networks)))
 		sys.exit()
 
 def connect_string():
@@ -159,14 +159,14 @@ def run_mgmd_nodes():
 	mgmdSibling = nodeid + 1
 	for i in range(args.management_nodes):
 		if i: nodeid, mgmdSibling = mgmdSibling, nodeid
-		nodeName = "mymgmd{0}".format(nodeid)
+		nodeName = "{0}-mgmd{1}".format(args.name, nodeid)
 		ip = "{0}{1}".format(MGMD_BASE_IP, nodeid)
 		container = get_container(nodeName)
 		if container is not None:
-			start_container(container, args.network, nodeName)
+			start_container(container, args.name, nodeName)
 		else:
 			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e NOWAIT={4} -e CONNECTSTRING={5} {6}:{7}'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, mgmdSibling, connect_string(), MGMD_BASE_IMAGE, VERSION))
+			cmd(runCmd.format(args.name, nodeName, ip, nodeid, mgmdSibling, connect_string(), MGMD_BASE_IMAGE, VERSION))
 		add_node(nodeName, "mgmd")
 
 def data_nodes_option(x):
@@ -178,28 +178,28 @@ def data_nodes_option(x):
 def run_data_nodes():
 	nodeid = NDBD_BASE_ID
 	for i in range(args.data_nodes):
-		nodeName = "myndbmtd{0}".format(nodeid)
+		nodeName = "{0}-ndbmtd{1}".format(args.name, nodeid)
 		ip = "{0}{1}".format(NDBD_BASE_IP, nodeid)
 		container = get_container(nodeName)
 		if container is not None:
-			start_container(container, args.network, nodeName)
+			start_container(container, args.name, nodeName)
 		else:
 			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}:{6}'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), NDBD_BASE_IMAGE, VERSION))
+			cmd(runCmd.format(args.name, nodeName, ip, nodeid, connect_string(), NDBD_BASE_IMAGE, VERSION))
 		add_node(nodeName, "ndbmtd")
 		nodeid += 1
 
 def run_sql_nodes():
 	nodeid = API_BASE_ID
 	for i in range(args.sql_nodes):
-		nodeName = "mysqlndb{0}".format(nodeid)
+		nodeName = "{0}-sql{1}".format(args.name, nodeid)
 		ip = "{0}{1}".format(API_BASE_IP, nodeid)
 		container = get_container(nodeName)
 		if container is not None:
-			start_container(container, args.network, nodeName)
+			start_container(container, args.name, nodeName)
 		else:
 			runCmd = 'docker run -d -P --net {0} --name {1} --ip {2} -e NODE_ID={3} -e CONNECTSTRING={4} {5}:{6}'
-			cmd(runCmd.format(args.network, nodeName, ip, nodeid, connect_string(), API_BASE_IMAGE, VERSION))
+			cmd(runCmd.format(args.name, nodeName, ip, nodeid, connect_string(), API_BASE_IMAGE, VERSION))
 		add_node(nodeName, "sql")
 		nodeid += 1
 
@@ -213,15 +213,15 @@ def start(args):
 	if not os.path.isfile(CONFIG_INI):
 		log("Error: management-node/config.ini does not exist, you need to issue the build command first")
 		sys.exit()
-	if network_exists(args.network):
-		log("Info: {0} network found, checking if any containers are already running".format(args.network))
-		containers = connected_containers(args.network)
+	if network_exists(args.name):
+		log("Info: {0} network found, checking if any containers are already running".format(args.name))
+		containers = connected_containers(args.name)
 		if len(containers) and containers[0] != "":
-			log("Error: {0} network already has running containers, please fully stop this cluster, or clean, before attempting to start".format(args.network))
+			log("Error: {0} network already has running containers, please fully stop this cluster, or clean, before attempting to start".format(args.name))
 			sys.exit()
 	else:
-		log("Info: {0} network not found, creating".format(args.network))
-		cmd("docker network create --subnet=" + SUBNET_BASE + " " + args.network)
+		log("Info: {0} network not found, creating".format(args.name))
+		cmd("docker network create --subnet=" + SUBNET_BASE + " " + args.name)
 	run_mgmd_nodes()
 	run_data_nodes()
 	run_sql_nodes()
@@ -231,17 +231,17 @@ def stop_containers(containers):
 	cmd("docker stop {0}".format(" ".join(containers)))
 
 def stop(args):
-	if network_exists(args.network):
-		debug("Found network {0}".format(args.network))
-		containers = connected_containers(args.network)
+	if network_exists(args.name):
+		debug("Found network {0}".format(args.name))
+		containers = connected_containers(args.name)
 		debug("Found containers: {0}".format(containers))
 		if len(containers) and containers[0] != "":
 			stop_containers(containers)
 			log("Info: Stopping containers done")
 		else:
-			log("Info: No containers found running on {0}".format(args.network))
+			log("Info: No containers found running on {0}".format(args.name))
 	else:
-		log("Info: {0} network not found".format(args.network))
+		log("Info: {0} network not found".format(args.name))
 
 def find_containers_using_image(name):
 	containers = cmd('docker ps -a --filter {0}ancestor={1}{0} --format {0}{{{{.ID}}}}{0}'.format(QUOTE, name)).rstrip("\n").split('\n')
@@ -264,6 +264,9 @@ def find_dangling_images():
 def remove_images(images):
 	cmd("docker rmi {0}".format(" ".join(images)))
 
+def remove_network(network):
+	cmd("docker network rm {0}".format(network))
+
 def clean(args):
 	containers = []
 	containers.extend(find_containers_using_image(MGMD_BASE_IMAGE+":"+VERSION))
@@ -283,16 +286,19 @@ def clean(args):
 		if len(dangling) and dangling[0] != "":
 			log("Info: Removing dangling images")
 			remove_images(dangling)
-	if network_exists(NETWORK_NAME):
-		cmd("docker network rm {0}".format(NETWORK_NAME))
+	if args.name:
+		if network_exists(args.name):
+			remove_network(args.name)
+	if network_exists(NAME):
+		remove_network(NAME)
 	if os.path.isfile(CONFIG_INI):
 		os.remove(CONFIG_INI)
 
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description="Create a test MySQL Cluster deployment in docker")
-	network = argparse.ArgumentParser(add_help=False)
-	network.add_argument('-n', '--network', default=NETWORK_NAME, help='Name of the docker network to use (default: '+NETWORK_NAME+')')
+	name = argparse.ArgumentParser(add_help=False)
+	name.add_argument('-n', '--name', default=NAME, help='The prefix to use for managing the network and containers (default: '+NAME+')')
 	mgmd_nodes = argparse.ArgumentParser(add_help=False)
 	mgmd_nodes.add_argument('-m', '--management-nodes', default=2, type=management_nodes_option, help='Number of Management nodes to run (default: 2; max: 2)')
 	data_nodes = argparse.ArgumentParser(add_help=False)
@@ -302,11 +308,11 @@ if __name__ == '__main__':
 	sp = parser.add_subparsers()
 	sp_build = sp.add_parser('build', parents=[mgmd_nodes, data_nodes, sql_nodes], help='Build the cluster containers')
 	sp_build.set_defaults(func=build)
-	sp_start = sp.add_parser('start', parents=[network, mgmd_nodes, data_nodes, sql_nodes], help='Start up the cluster containers')
+	sp_start = sp.add_parser('start', parents=[name, mgmd_nodes, data_nodes, sql_nodes], help='Start up the cluster containers')
 	sp_start.set_defaults(func=start)
-	sp_stop = sp.add_parser('stop', parents=[network], help='Stop the cluster containers for the specified network')
+	sp_stop = sp.add_parser('stop', parents=[name], help='Stop the cluster containers for the specified network')
 	sp_stop.set_defaults(func=stop)
-	sp_clean = sp.add_parser('clean', parents=[network], help='Stop and remove the cluster containers')
+	sp_clean = sp.add_parser('clean', parents=[name], help='Stop and remove the cluster containers')
 	sp_clean.add_argument('-i', '--images', default=False, action="store_true", help='Delete '+REPO+' docker images (default: false)')
 	sp_clean.add_argument('-d', '--dangling', default=False, action="store_true", help='Delete dangling docker images (default: false)')
 	sp_clean.set_defaults(func=clean)

@@ -35,7 +35,7 @@ optional arguments:
   --debug               Whether to print debug info (default: false)
 ```
 
-The script takes care of creating the cluster.ini file (using the config.ini.in file as a base template) in the build stage, and then starts up the cluster using the same configuration in the start stage. You must there invoke cluster.py with both the build and start corresponding arguments being the same, as the initial number of ndb nodes must be as expected when started before the cluster will complete initialization.
+The script takes care of creating the cluster.ini file (using the config.ini.in file as a base template) in the build stage, and then starts up the cluster using the same configuration in the start stage. You must therefore invoke cluster.py with both the build and start corresponding arguments being the same, as the initial number of ndb nodes must be as configured  , before the cluster will complete initialization.
 
 For a simple installation test environment this is as simple as:
 
@@ -76,11 +76,11 @@ $ cluster.py start
 2016-10-28T09:06:47.983000: Info: Started: [ "node" : { "name" : "mycluster-mgmd49", "bound_port" : 33036, "node_type" : "mgmd" } ,  "node" : { "name" : "mycluster-mgmd50", "bound_port" : 33037, "node_type" : "mgmd" } ,  "node" : { "name" : "mycluster-ndbmtd1", "bound_port" : 33038, "node_type" : "ndbmtd" } ,  "node" : { "name" : "mycluster-ndbmtd2", "bound_port" : 33039, "node_type" : "ndbmtd" } ,  "node" : { "name" : "mycluster-ndbmtd3", "bound_port" : 33040, "node_type" : "ndbmtd" } ,  "node" : { "name" : "mycluster-ndbmtd4", "bound_port" : 33041, "node_type" : "ndbmtd" } ,  "node" : { "name" : "mycluster-sql51", "bound_port" : 33042, "node_type" : "sql" } ,  "node" : { "name" : "mycluster-sql52", "bound_port" : 33043, "node_type" : "sql" } ]
 ```
 
-By default this builds and starts a docker network called `mycluster`, and within it a cluster containing 2 management nodes, 4 data nodes and 2 SQL nodes.
+By default cluster.py builds and starts a docker network called `mycluster`, and within it a cluster containing 2 management nodes, 4 data nodes and 2 SQL nodes.
 
 #### Starting multiple clusters
 
-To start multiple clusters on the same host, we need to have a unique naming scheme for the container names, and a unique network IP range to run each clutser network over. These are provided by the `--name` and `--base-network` parameters (or `-n` and `-b`).
+To start multiple clusters on the same host, we need to have a unique naming scheme for the container names, and a unique network IP range to run each cluster network over. These are provided by the `--name` and `--base-network` parameters (or `-n` and `-b`).
 
 As long as you provide unique values for the `--base-network` parameter when running both the `build` and `start` commands, and a unique `--name` whilst using `start`, then you can run two clusters of any shape relatively easily:
 

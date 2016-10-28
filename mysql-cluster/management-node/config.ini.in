@@ -15,7 +15,6 @@ MaxDiskWriteSpeed=2M
 BackupMaxWriteSize=256k
 BackupDataBufferSize=1M
 BackupLogBufferSize=4M
-BackupMemory=20M
 BackupReportFrequency=10
 MemReportFrequency=30
 LogLevelStartup=15

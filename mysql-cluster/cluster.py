@@ -44,7 +44,9 @@ API_BASE_ID = 51
 
 QUOTE = "\"" if platform.system() == "Windows" else "'"
 
-CONFIG_INI = os.getcwd()+"/management-node/config.ini"
+SCRIPTDIR = os.path.dirname(os.path.realpath(sys.argv[0]))
+
+CONFIG_INI = SCRIPTDIR+"/management-node/config.ini"
 
 nodes=[]
 
@@ -97,7 +99,7 @@ def write_ini_section(file, header, nodeid):
 
 def build_config_ini():
 	try:
-		cfgtmpl = os.getcwd()+"/management-node/config.ini.in"
+		cfgtmpl = SCRIPTDIR+"/management-node/config.ini.in"
 		shutil.copy(cfgtmpl, CONFIG_INI)
 	except shutil.Error as e:
 		print('Error: %s' % e)
@@ -119,9 +121,9 @@ def build_config_ini():
 
 def build(args):
 	build_config_ini()
-	cmd('docker build -t {0}:{1} -f management-node/Dockerfile management-node'.format(MGMD_BASE_IMAGE, VERSION))
-	cmd('docker build -t {0}:{1} -f data-node/Dockerfile data-node'.format(NDBD_BASE_IMAGE, VERSION))
-	cmd('docker build -t {0}:{1} -f sql-node/Dockerfile sql-node'.format(API_BASE_IMAGE, VERSION))
+	cmd('docker build -t {0}:{1} -f {2}/management-node/Dockerfile {2}/management-node'.format(MGMD_BASE_IMAGE, VERSION, SCRIPTDIR))
+	cmd('docker build -t {0}:{1} -f {2}/data-node/Dockerfile {2}/data-node'.format(NDBD_BASE_IMAGE, VERSION, SCRIPTDIR))
+	cmd('docker build -t {0}:{1} -f {2}/sql-node/Dockerfile {2}/sql-node'.format(API_BASE_IMAGE, VERSION, SCRIPTDIR))
 
 def get_container(name):
 	container = cmd('docker ps -q -a --filter {0}name={1}{0}'.format(QUOTE, name)).rstrip(",\n")
